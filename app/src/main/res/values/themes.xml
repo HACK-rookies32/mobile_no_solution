@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+        런치 윈도우 배경.
+
+        기본값이 어두워서 프로세스 시작 ~ 첫 프레임 사이(디버그 빌드 에뮬레이터 기준 2~3초,
+        설치 직후 첫 실행은 더 김)에 검은 화면이 보였다. 브랜드 색으로 칠해 두면
+        그 구간이 앱의 스플래시와 이어져 끊김이 사라진다.
+        API 31+ 는 시스템 스플래시가 windowSplashScreenBackground 를 쓴다.
+    -->
+    <style name="Theme.Kidhack" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/brand_orange</item>
+        <item name="android:windowSplashScreenBackground" tools:targetApi="31">@color/brand_orange</item>
+    </style>
+
+    <!-- MediaProjection 동의 다이얼로그만 띄우는 투명 액티비티용 -->
+    <style name="Theme.Kidhack.Transparent" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowContentOverlay">@null</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:windowAnimationStyle">@null</item>
+    </style>
+</resources>

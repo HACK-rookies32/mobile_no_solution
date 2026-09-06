@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?><!--
+   Sample backup rules file; uncomment and customize as necessary.
+   See https://developer.android.com/guide/topics/data/autobackup
+   for details.
+   Note: This file is ignored for devices older than API 31
+   See https://developer.android.com/about/versions/12/backup-restore
+-->
+<full-backup-content>
+    <!--
+   [VULN-MOBILE-STORE-2] include/exclude 규칙을 비워 둬 앱 데이터 전체(session DataStore 의 평문 토큰 포함)가
+   백업 대상이 된다. 의도된 취약점(OWASP Mobile M9). 보존: 고치지 말 것. 명세: mobile/docs/vuln-spec-mobile.md
+   <include domain="sharedpref" path="."/>
+   <exclude domain="sharedpref" path="device.xml"/>
+-->
+</full-backup-content>

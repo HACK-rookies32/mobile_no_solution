@@ -1,0 +1,32 @@
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+.idea/
+.gradle/
+.kotlin/
+*.log
+*.hprof
+*.jks
+*.keystore
+google-services.json
+
+# 로컬 환경 변수(API 키 등 비밀 값). .env.example 은 커밋해도 됨
+.env
+
+# 인수인계 메모. 작업자끼리 주고받는 것이라 저장소에 올리지 않는다.
+docs/handoff*.md
+
+# 네이티브 방어 구현/우회 설명 문서(로컬 참고용). 저장소에 올리지 않는다.
+docs/native-defense-bypass.md

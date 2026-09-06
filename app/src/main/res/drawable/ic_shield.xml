@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  유해사이트 관리 — 방패와 체크
+
+  24dp 격자 · 선 굵기 1.7 · 둥근 끝 · 채움 없음.
+  색은 Compose 의 Icon(tint = ...) 이 정한다. 여기서 색을 박으면 다크 모드에서 굳는다.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
+    <path
+        android:pathData="M12,3.5 L18.5,6.1 V11.3 C18.5,15.3 15.8,18.5 12,19.7 C8.2,18.5 5.5,15.3 5.5,11.3 V6.1 Z"
+        android:strokeWidth="1.7"
+        android:strokeColor="#FF000000"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M9.5,11.8 L11.4,13.7 L14.8,10.1"
+        android:strokeWidth="1.7"
+        android:strokeColor="#FF000000"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

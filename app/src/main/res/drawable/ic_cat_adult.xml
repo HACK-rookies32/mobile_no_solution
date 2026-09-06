@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 성인·음란물 — 금지 원(차단). 색은 Icon(tint) 이 정한다. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
+    <path android:pathData="M12,4.8 A7.2,7.2 0 1 0 12.01,4.8 Z"
+        android:strokeWidth="1.7" android:strokeColor="#FF000000"
+        android:strokeLineCap="round" android:strokeLineJoin="round" />
+    <path android:pathData="M6.9,6.9 L17.1,17.1"
+        android:strokeWidth="1.7" android:strokeColor="#FF000000" android:strokeLineCap="round" />
+</vector>

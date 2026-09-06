@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!--
+        [VULN-MOBILE-COMP-1] 과도 권한 — SYSTEM_ALERT_WINDOW(오버레이) + PACKAGE_USAGE_STATS(앱 사용통계) +
+        접근성 서비스 전체 화면 스캔. 감시 기능 구현에 쓰이나 오용 시 강력한 프라이버시 침해 표면.
+        의도된 취약점(OWASP Mobile M8 Security Misconfiguration / M6 Inadequate Privacy Controls).
+        아래 ChildBootReceiver exported·permission 없음도 같은 ID. 보존: 고치지 말 것. 명세: mobile/docs/vuln-spec-mobile.md
+    -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission
+        android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
+
+    <!--
+        안드로이드 11+ 패키지 가시성. 이게 없으면 PackageManager 가 다른 앱을 숨겨서
+        (logcat 의 AppsFilter BLOCKED) 앱 사용 모니터링이 앱 이름을 못 찾고 목록에서 빠진다.
+        QUERY_ALL_PACKAGES 대신 「런처에서 열 수 있는 앱」만 요청한다.
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.camera.autofocus"
+        android:required="false" />
+
+    <!--
+        [VULN-MOBILE-STORE-2] allowBackup=true + 빈 백업 규칙(res/xml/backup_rules.xml,
+        data_extraction_rules.xml 는 AGP 기본 주석 템플릿) → adb backup / 기기이전으로
+        session DataStore(평문 토큰·프로필) 통째 추출 가능. [VULN-MOBILE-STORE-1] 과 결합.
+        의도된 취약점(OWASP Mobile M9). 보존: 고치지 말 것. 명세: mobile/docs/vuln-spec-mobile.md
+    -->
+    <!--
+        [VULN-MOBILE-NET-1] 아래 android:usesCleartextTraffic="${usesCleartextTraffic}" 는 debug/api 변형에서
+        true 로 주입(app/build.gradle.kts). networkSecurityConfig 미설정 + 인증서 피닝 없음 → 평문 HTTP 전면
+        허용, MITM 가로채기 노출. 의도된 취약점(OWASP Mobile M5 Insecure Communication).
+        보존: 고치지 말 것. 명세: mobile/docs/vuln-spec-mobile.md
+    -->
+    <application
+        android:name=".KidhackApplication"
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Kidhack"
+        android:usesCleartextTraffic="${usesCleartextTraffic}">
+
+        <!-- [VULN-MOBILE-SECRET-1] Google Maps API 키가 빌드 시 Manifest 에 주입되고(app/build.gradle.kts
+             manifestPlaceholders["MAPS_API_KEY"]), Firebase API 키는 google-services.json → strings.xml 리소스로
+             박혀 APK 에서 그대로 추출 가능. 의도된 취약점(OWASP Mobile M2/M8). 보존: 고치지 말 것.
+             명세: mobile/docs/vuln-spec-mobile.md -->
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="${MAPS_API_KEY}" />
+
+        <!-- FCM: 서버는 data 전용 푸시를 보내므로 알림창은 앱이 그린다. 기본 채널은 부모 요청 채널(헤드업). -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="kidhack_child_request" />
+        <service
+            android:name=".background.push.KidhackFirebaseMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.Kidhack"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <service
+            android:name=".background.location.LocationTrackingService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
+
+        <!-- 부모 캡처 요청 → 화면 녹화 동의를 받는 투명 액티비티. 알림 탭이 이 화면으로 들어온다. -->
+        <activity
+            android:name=".background.capture.MediaProjectionRequestActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:taskAffinity=""
+            android:theme="@style/Theme.Kidhack.Transparent" />
+
+        <service
+            android:name=".background.capture.ScreenCaptureService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
+
+        <!--
+            Firebase 없이 부모 요청을 실시간 수신하는 WebSocket 상주 서비스.
+            운영 배포 시에는 dataSync 대신 specialUse 선언을 검토할 것(안드로이드 15의 dataSync 하루 6시간 제한).
+        -->
+        <service
+            android:name=".background.command.ChildCommandService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <service
+            android:name=".background.accessibility.HarmfulBlockAccessibilityService"
+            android:exported="true"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/harmful_block_accessibility_service" />
+        </service>
+
+        <!-- [VULN-MOBILE-COMP-1] ChildBootReceiver 가 exported=true 이면서 permission 미지정 →
+             타 앱이 명시적 인텐트로 호출 가능(부팅 로직 임의 트리거). 위 과도 권한과 같은 ID.
+             의도된 취약점(OWASP Mobile M8). 보존: 고치지 말 것. 명세: mobile/docs/vuln-spec-mobile.md -->
+        <receiver
+            android:name=".background.ChildBootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+    </application>
+
+</manifest>

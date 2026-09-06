@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  겹친 네모 — 복사
+
+  24dp 격자 · 선 굵기 1.8 · 둥근 끝 · 채움 없음.
+  색은 Compose 의 Icon(tint = ...) 이 정한다. 여기서 색을 박으면 다크 모드에서 굳는다.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
+    <path
+        android:pathData="M9.8,9.8 H19 A1.8,1.8 0 0 1 20.8,11.6 V20.8 A1.8,1.8 0 0 1 19,22.6 H9.8 A1.8,1.8 0 0 1 8,20.8 V11.6 A1.8,1.8 0 0 1 9.8,9.8 Z"
+        android:strokeWidth="1.8"
+        android:strokeColor="#FF000000"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M15,6.6 V5.8 A1.8,1.8 0 0 0 13.2,4 H5.8 A1.8,1.8 0 0 0 4,5.8 V13.2 A1.8,1.8 0 0 0 5.8,15 H6.6"
+        android:strokeWidth="1.8"
+        android:strokeColor="#FF000000"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

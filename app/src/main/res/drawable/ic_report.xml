@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  사용 리포트 — 막대 그래프
+
+  24dp 격자 · 선 굵기 1.7 · 둥근 끝 · 채움 없음.
+  색은 Compose 의 Icon(tint = ...) 이 정한다. 여기서 색을 박으면 다크 모드에서 굳는다.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
+    <path
+        android:pathData="M4,20 H20"
+        android:strokeWidth="1.7"
+        android:strokeColor="#FF000000"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M7,20 V13"
+        android:strokeWidth="1.7"
+        android:strokeColor="#FF000000"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M12,20 V6"
+        android:strokeWidth="1.7"
+        android:strokeColor="#FF000000"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M17,20 V10"
+        android:strokeWidth="1.7"
+        android:strokeColor="#FF000000"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

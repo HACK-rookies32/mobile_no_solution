@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?><!--
+   Sample data extraction rules file; uncomment and customize as necessary.
+   See https://developer.android.com/about/versions/12/backup-restore#xml-changes
+   for details.
+-->
+<data-extraction-rules>
+    <!-- [VULN-MOBILE-STORE-2] cloud-backup/device-transfer 규칙을 비워 둬 세션 토큰 포함 앱 데이터가
+         클라우드 백업·기기이전 대상이 된다. 의도된 취약점(OWASP Mobile M9). 명세: mobile/docs/vuln-spec-mobile.md -->
+    <cloud-backup>
+        <!-- TODO: Use <include> and <exclude> to control what is backed up.
+        <include .../>
+        <exclude .../>
+        -->
+    </cloud-backup>
+    <!--
+    <device-transfer>
+        <include .../>
+        <exclude .../>
+    </device-transfer>
+    -->
+</data-extraction-rules>

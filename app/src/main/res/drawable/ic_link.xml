@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  고리 — 링크 첨부
+
+  24dp 격자 · 선 굵기 1.8 · 둥근 끝 · 채움 없음.
+  색은 Compose 의 Icon(tint = ...) 이 정한다. 여기서 색을 박으면 다크 모드에서 굳는다.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
+    <path
+        android:pathData="M10,13.6 A4.1,4.1 0 0 0 15.8,13.6 L18.7,10.7 A4.1,4.1 0 0 0 12.9,4.9 L11.4,6.4"
+        android:strokeWidth="1.8"
+        android:strokeColor="#FF000000"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M14,10.4 A4.1,4.1 0 0 0 8.2,10.4 L5.3,13.3 A4.1,4.1 0 0 0 11.1,19.1 L12.6,17.6"
+        android:strokeWidth="1.8"
+        android:strokeColor="#FF000000"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>
