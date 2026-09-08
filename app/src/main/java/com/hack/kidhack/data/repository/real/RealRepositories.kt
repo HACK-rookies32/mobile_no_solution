@@ -1094,19 +1094,81 @@ private fun Context.filePart(uri: String): MultipartBody.Part {
  */
 private fun Context.chatMediaPart(uri: String, mime: String): MultipartBody.Part {
     val parsed = Uri.parse(uri)
-    val bytes = contentResolver.openInputStream(parsed)?.use { it.readBytes() }
+    val raw = contentResolver.openInputStream(parsed)?.use { it.readBytes() }
         ?: throw IllegalStateException("첨부 파일을 읽을 수 없습니다")
+
+    // 이미지는 업로드 전 축소·압축한다. 카메라 원본은 1MB 를 넘어 서버(nginx)가 413 으로
+    // 거부하기 때문이다. 오디오 등은 그대로 보낸다.
+    val isImage = mime.startsWith("image")
+    val bytes = if (isImage) downscaleJpeg(raw) else raw
+    val outMime = if (isImage) "image/jpeg" else mime
     val ext = when {
         mime.startsWith("audio") -> "m4a"
-        mime.endsWith("png") -> "png"
-        else -> "jpg"
+        isImage -> "jpg"        // 이미지는 항상 jpeg 로 재인코딩한다
+        else -> "bin"
     }
     val name = "chat-${System.currentTimeMillis()}.$ext"
     return MultipartBody.Part.createFormData(
         "file",
         name,
-        bytes.toRequestBody(mime.toMediaTypeOrNull()),
+        bytes.toRequestBody(outMime.toMediaTypeOrNull()),
     )
+}
+
+private const val CHAT_IMAGE_MAX_DIM = 1600
+private const val CHAT_IMAGE_QUALITY = 80
+
+/**
+ * 이미지 바이트를 긴 변 [CHAT_IMAGE_MAX_DIM] 이하로 줄이고 JPEG [CHAT_IMAGE_QUALITY] 로 압축한다.
+ * EXIF 회전 정보를 픽셀에 반영해 세로/가로가 틀어지지 않게 한다. 디코드에 실패하면 원본을 그대로 돌려준다.
+ */
+private fun downscaleJpeg(data: ByteArray): ByteArray {
+    val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    android.graphics.BitmapFactory.decodeByteArray(data, 0, data.size, bounds)
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return data
+
+    val longest = maxOf(bounds.outWidth, bounds.outHeight)
+    var sample = 1
+    while (longest / sample > CHAT_IMAGE_MAX_DIM * 2) sample *= 2
+    val opts = android.graphics.BitmapFactory.Options().apply { inSampleSize = sample }
+    var bmp = android.graphics.BitmapFactory.decodeByteArray(data, 0, data.size, opts) ?: return data
+
+    bmp = applyExifRotation(bmp, data)
+
+    val scale = CHAT_IMAGE_MAX_DIM.toFloat() / maxOf(bmp.width, bmp.height)
+    if (scale < 1f) {
+        val scaled = android.graphics.Bitmap.createScaledBitmap(
+            bmp, (bmp.width * scale).toInt().coerceAtLeast(1),
+            (bmp.height * scale).toInt().coerceAtLeast(1), true,
+        )
+        if (scaled != bmp) bmp.recycle()
+        bmp = scaled
+    }
+
+    val out = java.io.ByteArrayOutputStream()
+    bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, CHAT_IMAGE_QUALITY, out)
+    bmp.recycle()
+    return out.toByteArray()
+}
+
+private fun applyExifRotation(bmp: android.graphics.Bitmap, data: ByteArray): android.graphics.Bitmap {
+    val degrees = runCatching {
+        val exif = android.media.ExifInterface(java.io.ByteArrayInputStream(data))
+        when (exif.getAttributeInt(
+            android.media.ExifInterface.TAG_ORIENTATION,
+            android.media.ExifInterface.ORIENTATION_NORMAL,
+        )) {
+            android.media.ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+            android.media.ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+            android.media.ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+            else -> 0f
+        }
+    }.getOrDefault(0f)
+    if (degrees == 0f) return bmp
+    val matrix = android.graphics.Matrix().apply { postRotate(degrees) }
+    val rotated = android.graphics.Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, matrix, true)
+    if (rotated != bmp) bmp.recycle()
+    return rotated
 }
 
 private fun File.toImagePart(): MultipartBody.Part =

@@ -23,10 +23,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
@@ -44,6 +47,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,6 +59,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -77,6 +85,18 @@ import java.io.File
 
 private const val TAG = "ChatMedia"
 
+/** Uri 를 문자열로 저장·복원하는 [Saver]. 카메라 재생성에도 촬영 URI 를 지킨다(BUG 2). */
+private val UriSaver: Saver<Uri?, String> = Saver(
+    save = { it?.toString() ?: "" },
+    restore = { s -> s.takeIf { it.isNotEmpty() }?.let(Uri::parse) },
+)
+
+/** 이 URI 가 가리키는 대상에 읽을 수 있는 바이트가 하나라도 있으면 true. */
+private fun uriHasBytes(context: android.content.Context, uri: Uri): Boolean =
+    runCatching {
+        context.contentResolver.openInputStream(uri)?.use { it.read() != -1 } ?: false
+    }.getOrDefault(false)
+
 /** 파형에 남겨 두는 샘플 개수. 새 샘플이 오른쪽에 붙고 오래된 것이 왼쪽으로 밀려난다. */
 private const val WAVE_SAMPLES = 24
 
@@ -93,7 +113,8 @@ private const val AMPLITUDE_CEIL = 14000f
  *  - 녹음 중: 줄 전체가 🗑(취소) · 실시간 파형 · 타이머 · 전송 으로 바뀐다.
  *
  * 카메라/마이크 권한은 버튼을 누르는 순간에 없으면 다시 요청한다(온보딩 거절 안전망).
- * [onImage]/[onAudio] 는 업로드 전 로컬 URI(문자열)를 준다. 전송은 호출부(ViewModel)가 맡는다.
+ * [onImagePicked] 는 촬영/선택한 로컬 URI 를 위로 올린다(미리보기용, 즉시 전송 아님).
+ * [onAudio] 는 녹음 파일 URI 를 준다. 전송은 호출부(화면/ViewModel)가 맡는다.
  */
 @Composable
 fun ChatComposer(
@@ -101,7 +122,7 @@ fun ChatComposer(
     onDraft: (String) -> Unit,
     onSend: () -> Unit,
     canSend: Boolean,
-    onImage: (String) -> Unit,
+    onImagePicked: (String) -> Unit,
     onAudio: (String) -> Unit,
     hint: String,
     sendContentDescription: String,
@@ -114,13 +135,22 @@ fun ChatComposer(
     var trayOpen by remember { mutableStateOf(false) }
 
     // ---- 카메라 ----
-    var pendingPhotoUri by remember { mutableStateOf<Uri?>(null) }
+    // 풀스크린 카메라 액티비티가 프로세스를 재생성할 수 있어, 그 사이 URI 가 날아가면
+    // 성공 콜백이 null 을 보고 아무것도 안 보낸다(BUG 2). rememberSaveable 로 살려 둔다.
+    var pendingPhotoUri by rememberSaveable(stateSaver = UriSaver) {
+        mutableStateOf<Uri?>(null)
+    }
     val takePicture = rememberLauncherForActivityResult(
         ActivityResultContracts.TakePicture(),
     ) { success ->
         val uri = pendingPhotoUri
         pendingPhotoUri = null
-        if (success && uri != null) onImage(uri.toString())
+        // 촬영 성공 시 바로 보내지 않고 미리보기로 올려 준다. 전송은 호출부가 맡는다.
+        //
+        // 일부 OEM 카메라앱은 실제로 사진을 찍고도 success=false(RESULT_CANCELED)를 준다.
+        // 그래서 플래그만 믿으면 사진이 조용히 버려진다. 파일에 실제 바이트가 있으면
+        // 성공으로 간주해 미리보기로 넘긴다(진짜 취소면 파일이 비어 있어 걸러진다).
+        if (uri != null && (success || uriHasBytes(context, uri))) onImagePicked(uri.toString())
     }
     fun launchCamera() {
         val file = File(context.cacheDir, "chat-photo-${System.currentTimeMillis()}.jpg")
@@ -143,7 +173,7 @@ fun ChatComposer(
     // ---- 갤러리(포토 피커, 권한 불필요) ----
     val pickMedia = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia(),
-    ) { uri -> if (uri != null) onImage(uri.toString()) }
+    ) { uri -> if (uri != null) onImagePicked(uri.toString()) }
     fun onGalleryTile() {
         trayOpen = false
         pickMedia.launch(
@@ -538,9 +568,13 @@ private fun formatElapsed(sec: Int): String {
     return "%d:%02d".format(m, s)
 }
 
-/** 이미지 메시지 본문. 서버 상대 경로를 절대 URL 로 바꿔 그린다. */
+/** 이미지 메시지 본문. 서버 상대 경로를 절대 URL 로 바꿔 그린다. 탭하면 [onClick]. */
 @Composable
-fun ChatImageBubble(mediaUrl: String?, modifier: Modifier = Modifier) {
+fun ChatImageBubble(
+    mediaUrl: String?,
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
+) {
     if (mediaUrl.isNullOrBlank()) return
     AsyncImage(
         model = ImageRequest.Builder(LocalContext.current)
@@ -552,8 +586,113 @@ fun ChatImageBubble(mediaUrl: String?, modifier: Modifier = Modifier) {
         modifier = modifier
             .widthIn(max = 200.dp)
             .aspectRatio(1f)
-            .clip(RoundedCornerShape(14.dp)),
+            .clip(RoundedCornerShape(14.dp))
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
     )
+}
+
+/** [FullscreenImageView] 의 두 얼굴. 이미지는 같고 상단 액션 바만 바뀐다. */
+enum class FullscreenImageMode { DETAIL, PRE_SEND }
+
+/**
+ * 하나의 풀스크린 이미지 뷰어. 액션 바만 [mode] 로 갈린다.
+ *  - [FullscreenImageMode.DETAIL]: 보낸 사진을 크게. 핀치 줌/패닝 + 닫기.
+ *  - [FullscreenImageMode.PRE_SEND]: 촬영/선택 직후 미리보기. 상단에 취소/전송.
+ *
+ * [model] 은 Coil 이 그대로 받는 값이다 — 보낸 사진은 [RemoteUrl.absolute] 로 만든 절대
+ * URL 문자열을, 미리보기는 로컬 `content://`/`file://` Uri 를 넘긴다.
+ */
+@Composable
+fun FullscreenImageView(
+    model: Any?,
+    mode: FullscreenImageMode,
+    onClose: () -> Unit,
+    onSend: (() -> Unit)? = null,
+) {
+    val colors = LocalKidhackColors.current
+    var scale by remember { mutableStateOf(1f) }
+    var offset by remember { mutableStateOf(Offset.Zero) }
+
+    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+        val imageModifier = if (mode == FullscreenImageMode.DETAIL) {
+            Modifier
+                .fillMaxSize()
+                .pointerInput(Unit) {
+                    detectTransformGestures { _, pan, zoom, _ ->
+                        scale = (scale * zoom).coerceIn(1f, 5f)
+                        offset = if (scale > 1f) offset + pan else Offset.Zero
+                    }
+                }
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                    translationX = offset.x
+                    translationY = offset.y
+                }
+        } else {
+            Modifier.fillMaxSize()
+        }
+
+        AsyncImage(
+            model = ImageRequest.Builder(LocalContext.current)
+                .data(model)
+                .crossfade(true)
+                .build(),
+            contentDescription = "사진",
+            contentScale = ContentScale.Fit,
+            modifier = imageModifier,
+        )
+
+        // 상단 액션 바 — 반투명 검정 위에 얹어 밝은 사진에서도 아이콘이 보이게.
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            when (mode) {
+                FullscreenImageMode.DETAIL -> {
+                    RoundIconButton(
+                        iconRes = R.drawable.ic_close,
+                        contentDescription = "닫기",
+                        onClick = onClose,
+                        tint = Color.White,
+                    )
+                }
+                FullscreenImageMode.PRE_SEND -> {
+                    TextActionButton(text = "취소", color = Color.White, onClick = onClose)
+                    Spacer(Modifier.weight(1f))
+                    TextActionButton(
+                        text = "전송",
+                        color = colors.brand,
+                        onClick = { onSend?.invoke() },
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** 풀스크린 액션 바의 글자 버튼. 44dp 유효 터치 영역을 보장한다. */
+@Composable
+private fun TextActionButton(text: String, color: Color, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .heightIn(min = 44.dp)
+            .clip(RoundedCornerShape(22.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 18.dp, vertical = 10.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = text,
+            color = color,
+            fontFamily = KidhackFontFamily,
+            fontWeight = FontBold,
+            fontSize = 16.sp,
+        )
+    }
 }
 
 /**

@@ -1,5 +1,6 @@
 package com.hack.kidhack.feature.child.chat
 
+import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -31,7 +32,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -47,6 +50,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hack.kidhack.R
+import com.hack.kidhack.core.common.RemoteUrl
 import com.hack.kidhack.core.designsystem.component.KidHeaderDivider
 import com.hack.kidhack.core.designsystem.theme.FontBold
 import com.hack.kidhack.core.designsystem.theme.FontSemibold
@@ -58,6 +62,8 @@ import com.hack.kidhack.domain.model.Role
 import com.hack.kidhack.feature.chat.ChatAudioBubble
 import com.hack.kidhack.feature.chat.ChatComposer
 import com.hack.kidhack.feature.chat.ChatImageBubble
+import com.hack.kidhack.feature.chat.FullscreenImageMode
+import com.hack.kidhack.feature.chat.FullscreenImageView
 import com.hack.kidhack.feature.parent.formatChatSentAt
 import org.koin.androidx.compose.koinViewModel
 import java.time.LocalDate
@@ -112,6 +118,11 @@ fun ChildChatScreen(
 
     val partner = stringResource(R.string.child_chat_mom)
 
+    // 풀스크린 이미지 오버레이 — 촬영/선택 직후 미리보기와 보낸 사진 상세.
+    var previewUri by remember { mutableStateOf<Uri?>(null) }
+    var viewerUrl by remember { mutableStateOf<String?>(null) }
+
+    Box(modifier = Modifier.fillMaxSize()) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -215,6 +226,7 @@ fun ChildChatScreen(
                             // 같은 사람이 잇달아 보내면 얼굴은 한 번만 — 같은 얼굴이 줄마다
                             // 반복되면 누가 말했는지가 아니라 얼굴이 읽힌다.
                             showAvatar = showDate || older?.fromRole != message.fromRole,
+                            onImageClick = { viewerUrl = it },
                         )
                     }
                 }
@@ -244,7 +256,7 @@ fun ChildChatScreen(
                 onDraft = viewModel::onDraft,
                 onSend = viewModel::send,
                 canSend = state.canSend,
-                onImage = viewModel::sendImage,
+                onImagePicked = { previewUri = Uri.parse(it) },
                 onAudio = viewModel::sendAudio,
                 hint = stringResource(R.string.child_chat_hint),
                 sendContentDescription = stringResource(R.string.child_chat_send),
@@ -252,6 +264,26 @@ fun ChildChatScreen(
                 // 탭 껍데기(TabShell)가 이미 탭 바 높이만큼 비워 두고 그만큼을 소비했다고
                 // 알려 주므로, 여기서는 모자란 만큼만 더하면 된다.
                 modifier = Modifier.imePadding(),
+            )
+        }
+    }
+
+        previewUri?.let { uri ->
+            FullscreenImageView(
+                model = uri,
+                mode = FullscreenImageMode.PRE_SEND,
+                onClose = { previewUri = null },
+                onSend = {
+                    viewModel.sendImage(uri.toString())
+                    previewUri = null
+                },
+            )
+        }
+        viewerUrl?.let { url ->
+            FullscreenImageView(
+                model = RemoteUrl.absolute(url),
+                mode = FullscreenImageMode.DETAIL,
+                onClose = { viewerUrl = null },
             )
         }
     }
@@ -283,7 +315,12 @@ private fun DateChip(date: LocalDate?) {
 }
 
 @Composable
-private fun ChatBubble(message: ChatMessage, partner: String, showAvatar: Boolean) {
+private fun ChatBubble(
+    message: ChatMessage,
+    partner: String,
+    showAvatar: Boolean,
+    onImageClick: (String) -> Unit,
+) {
     val colors = LocalKidhackColors.current
     val mine = message.fromRole == Role.CHILD
     Row(
@@ -310,7 +347,10 @@ private fun ChatBubble(message: ChatMessage, partner: String, showAvatar: Boolea
             Spacer(Modifier.size(6.dp))
         }
         when (message.type) {
-            MessageType.IMAGE -> ChatImageBubble(mediaUrl = message.mediaUrl)
+            MessageType.IMAGE -> ChatImageBubble(
+                mediaUrl = message.mediaUrl,
+                onClick = message.mediaUrl?.let { url -> { onImageClick(url) } },
+            )
             MessageType.AUDIO -> ChatAudioBubble(
                 mediaUrl = message.mediaUrl,
                 bubbleColor = if (mine) colors.brand else colors.card,

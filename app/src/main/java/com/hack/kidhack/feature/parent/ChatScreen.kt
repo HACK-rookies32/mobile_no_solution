@@ -1,5 +1,6 @@
 package com.hack.kidhack.feature.parent
 
+import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -39,6 +40,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -81,6 +83,8 @@ import com.hack.kidhack.domain.model.Role
 import com.hack.kidhack.feature.chat.ChatAudioBubble
 import com.hack.kidhack.feature.chat.ChatComposer
 import com.hack.kidhack.feature.chat.ChatImageBubble
+import com.hack.kidhack.feature.chat.FullscreenImageMode
+import com.hack.kidhack.feature.chat.FullscreenImageView
 import com.hack.kidhack.domain.repository.ChatRepository
 import com.hack.kidhack.domain.repository.ChildRepository
 import com.hack.kidhack.domain.repository.SelectedChildRepository
@@ -386,24 +390,51 @@ fun ParentChatScreen(viewModel: ParentChatViewModel = koinViewModel()) {
         onDispose { ImmersiveContent.active = false }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(colors.card)
-            .statusBarsPadding(),
-    ) {
-        if (selectedRoom == null) {
-            RoomList(state = state, onOpen = viewModel::selectRoom, onRetry = viewModel::loadRooms)
-        } else {
-            RoomDetail(
-                room = selectedRoom,
-                state = state,
-                onBack = { viewModel.selectRoom(null) },
-                onDraft = viewModel::onDraft,
-                onSend = viewModel::send,
-                onLoadOlder = viewModel::loadOlder,
-                onSendImage = viewModel::sendImage,
-                onSendAudio = viewModel::sendAudio,
+    // 풀스크린 이미지 오버레이 — 촬영/선택 직후 미리보기(previewUri)와 보낸 사진 상세(viewerUrl).
+    var previewUri by remember { mutableStateOf<Uri?>(null) }
+    var viewerUrl by remember { mutableStateOf<String?>(null) }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(colors.card)
+                .statusBarsPadding(),
+        ) {
+            if (selectedRoom == null) {
+                RoomList(state = state, onOpen = viewModel::selectRoom, onRetry = viewModel::loadRooms)
+            } else {
+                RoomDetail(
+                    room = selectedRoom,
+                    state = state,
+                    onBack = { viewModel.selectRoom(null) },
+                    onDraft = viewModel::onDraft,
+                    onSend = viewModel::send,
+                    onLoadOlder = viewModel::loadOlder,
+                    onImagePicked = { previewUri = Uri.parse(it) },
+                    onImageClick = { viewerUrl = it },
+                    onSendAudio = viewModel::sendAudio,
+                )
+            }
+        }
+
+        // 미리보기 → 전송 시 기존 업로드→sendMedia 경로를 그대로 탄다.
+        previewUri?.let { uri ->
+            FullscreenImageView(
+                model = uri,
+                mode = FullscreenImageMode.PRE_SEND,
+                onClose = { previewUri = null },
+                onSend = {
+                    viewModel.sendImage(uri.toString())
+                    previewUri = null
+                },
+            )
+        }
+        viewerUrl?.let { url ->
+            FullscreenImageView(
+                model = RemoteUrl.absolute(url),
+                mode = FullscreenImageMode.DETAIL,
+                onClose = { viewerUrl = null },
             )
         }
     }
@@ -479,13 +510,37 @@ private fun RoomRow(room: ChatRoom, onClick: () -> Unit) {
                     color = colors.text,
                 )
                 Spacer(Modifier.height(4.dp))
-                Text(
-                    room.lastMessage.ifBlank { stringResource(R.string.parent_chat_no_message) },
-                    color = colors.subtle,
-                    fontSize = 12.5.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                // 사진·음성 메시지면 라벨 앞에 앱 벡터 아이콘을 둔다. 이모지는 안 쓴다.
+                val previewIcon = when (room.lastMessageType) {
+                    MessageType.IMAGE -> R.drawable.ic_camera
+                    MessageType.AUDIO -> R.drawable.ic_mic
+                    else -> null
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (previewIcon != null) {
+                        Icon(
+                            painter = painterResource(previewIcon),
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
+                            tint = colors.subtle,
+                        )
+                        Spacer(Modifier.width(4.dp))
+                    }
+                    Text(
+                        // 빈 미리보기 fallback 은 진짜로 메시지가 없을 때(라벨도 종류도 없음)만.
+                        room.lastMessage.ifBlank {
+                            if (room.lastMessageType == null) {
+                                stringResource(R.string.parent_chat_no_message)
+                            } else {
+                                ""
+                            }
+                        },
+                        color = colors.subtle,
+                        fontSize = 12.5.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
             Spacer(Modifier.width(10.dp))
             Column(horizontalAlignment = Alignment.End) {
@@ -562,7 +617,8 @@ private fun ColumnScope.RoomDetail(
     onDraft: (String) -> Unit,
     onSend: () -> Unit,
     onLoadOlder: () -> Unit,
-    onSendImage: (String) -> Unit,
+    onImagePicked: (String) -> Unit,
+    onImageClick: (String) -> Unit,
     onSendAudio: (String) -> Unit,
 ) {
     val colors = LocalKidhackColors.current
@@ -630,7 +686,7 @@ private fun ColumnScope.RoomDetail(
                         textAlign = TextAlign.Center,
                     )
                 }
-                MessageRow(message = m)
+                MessageRow(message = m, onImageClick = onImageClick)
             }
         }
         if (state.hasOlder) {
@@ -659,7 +715,7 @@ private fun ColumnScope.RoomDetail(
         onDraft = onDraft,
         onSend = onSend,
         canSend = state.draft.isNotBlank(),
-        onImage = onSendImage,
+        onImagePicked = onImagePicked,
         onAudio = onSendAudio,
         hint = stringResource(R.string.parent_chat_input_hint),
         sendContentDescription = stringResource(R.string.parent_chat_send),
@@ -676,7 +732,7 @@ private fun ColumnScope.RoomDetail(
  * <p>시각은 풍선 바깥 아래에 붙인다. 안에 넣으면 짧은 말일수록 풍선이 시각 폭에 맞춰 늘어난다.
  */
 @Composable
-private fun MessageRow(message: ChatMessage) {
+private fun MessageRow(message: ChatMessage, onImageClick: (String) -> Unit) {
     val colors = LocalKidhackColors.current
     val mine = message.fromRole == Role.PARENT
     val shape = if (mine) {
@@ -694,7 +750,10 @@ private fun MessageRow(message: ChatMessage) {
             Spacer(Modifier.width(6.dp))
         }
         when (message.type) {
-            MessageType.IMAGE -> ChatImageBubble(mediaUrl = message.mediaUrl)
+            MessageType.IMAGE -> ChatImageBubble(
+                mediaUrl = message.mediaUrl,
+                onClick = message.mediaUrl?.let { url -> { onImageClick(url) } },
+            )
             MessageType.AUDIO -> ChatAudioBubble(
                 mediaUrl = message.mediaUrl,
                 bubbleColor = if (mine) colors.brand else colors.surface,

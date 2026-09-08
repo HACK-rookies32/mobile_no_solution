@@ -345,6 +345,8 @@ fun ChatRoomDto.toDomain(titleOverride: String? = null): ChatRoom = ChatRoom(
         ?: counterpartName?.takeIf { it.isNotBlank() }
         ?: "채팅",
     lastMessage = lastMessage.orEmpty(),
+    lastMessageType = lastMessageType?.takeIf { it.isNotBlank() }
+        ?.let { com.hack.kidhack.domain.model.MessageType.fromWire(it) },
     lastAt = lastMessageAt.orEmpty(),
     unreadCount = unreadCount,
     counterpartProfileImageUrl = counterpartProfileImageUrl,

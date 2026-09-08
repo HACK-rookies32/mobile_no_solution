@@ -518,6 +518,8 @@ data class ChatRoomDto(
     val counterpartName: String? = null,
     val counterpartProfileImageUrl: String? = null,
     val lastMessage: String? = null,
+    /** 마지막 메시지 종류(TEXT/IMAGE/AUDIO). 서버 #220 부터 내려온다. 없으면 null. */
+    val lastMessageType: String? = null,
     val lastMessageAt: String? = null,
     val unreadCount: Int = 0,
     val createdAt: String? = null,

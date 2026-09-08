@@ -272,6 +272,8 @@ data class ChatRoom(
     val title: String,
     val lastMessage: String,
     val lastAt: String,
+    /** 마지막 메시지 종류. 목록 미리보기에 사진/음성 아이콘을 붙일지 정한다. 없으면 null. */
+    val lastMessageType: MessageType? = null,
     /** 안 읽은 메시지 수. 목록 배지에 쓴다. */
     val unreadCount: Int = 0,
     val counterpartProfileImageUrl: String? = null,
