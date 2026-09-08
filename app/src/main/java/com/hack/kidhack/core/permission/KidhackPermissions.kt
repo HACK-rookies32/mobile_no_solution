@@ -24,6 +24,8 @@ object KidhackPermissions {
 
     val camera = Manifest.permission.CAMERA
 
+    val microphone = Manifest.permission.RECORD_AUDIO
+
     val backgroundLocation: String?
         get() = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             Manifest.permission.ACCESS_BACKGROUND_LOCATION
@@ -155,6 +157,8 @@ object KidhackPermissions {
     }
 
     fun hasCamera(context: Context): Boolean = isGranted(context, camera)
+
+    fun hasMicrophone(context: Context): Boolean = isGranted(context, microphone)
 
     fun hasUsageStats(context: Context): Boolean {
         val appOps = context.getSystemService(AppOpsManager::class.java) ?: return false

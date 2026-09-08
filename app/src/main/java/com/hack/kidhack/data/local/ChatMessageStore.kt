@@ -119,7 +119,15 @@ class ChatMessageStore(context: Context) {
 
     private fun write(roomId: String, messages: List<ChatMessage>) {
         val dtos = messages.takeLast(MAX_MESSAGES).map {
-            ChatMessageDto(it.id, it.roomId, it.fromRole.name, it.text, it.sentAt)
+            ChatMessageDto(
+                id = it.id,
+                roomId = it.roomId,
+                fromRole = it.fromRole.name,
+                text = it.text,
+                sentAt = it.sentAt,
+                type = it.type.name,
+                mediaUrl = it.mediaUrl,
+            )
         }
         runCatching {
             root.mkdirs()

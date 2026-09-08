@@ -4,6 +4,7 @@ import android.util.Log
 import com.hack.kidhack.core.common.KidhackJson
 import com.hack.kidhack.data.remote.dto.FlexibleDateTimeSerializer
 import com.hack.kidhack.domain.model.ChatMessage
+import com.hack.kidhack.domain.model.MessageType
 import com.hack.kidhack.domain.model.Role
 import com.hack.kidhack.domain.repository.SessionRepository
 import io.reactivex.disposables.CompositeDisposable
@@ -92,10 +93,29 @@ class ChatWebSocketClient(
     }
 
     fun send(roomId: String, senderId: Long, content: String) {
-        val body = json.encodeToString(
-            StompChatSendBody.serializer(),
+        sendBody(
+            roomId,
             StompChatSendBody(senderId = senderId, content = content),
+            echo = content,
         )
+    }
+
+    /** 첨부(IMAGE/AUDIO) 전송. content 는 비우고 type·mediaUrl 을 실어 보낸다. */
+    fun sendMedia(roomId: String, senderId: Long, type: MessageType, mediaUrl: String) {
+        sendBody(
+            roomId,
+            StompChatSendBody(
+                senderId = senderId,
+                content = "",
+                type = type.name,
+                mediaUrl = mediaUrl,
+            ),
+            echo = mediaUrl,
+        )
+    }
+
+    private fun sendBody(roomId: String, body: StompChatSendBody, echo: String) {
+        val payload = json.encodeToString(StompChatSendBody.serializer(), body)
         scope.launch {
             ensureConnected()
             val client = stomp
@@ -104,9 +124,9 @@ class ChatWebSocketClient(
                 return@launch
             }
             disposables.add(
-                client.send("/pub/chat/$roomId", body)
+                client.send("/pub/chat/$roomId", payload)
                     .subscribe(
-                        { _events.tryEmit(ChatWsEvent.Send(roomId, content)) },
+                        { _events.tryEmit(ChatWsEvent.Send(roomId, echo)) },
                         { t ->
                             Log.w(TAG, "stomp send failed", t)
                             _events.tryEmit(ChatWsEvent.Error(t.message ?: "전송 실패"))
@@ -235,6 +255,8 @@ class ChatWebSocketClient(
                             fromRole = fromRole,
                             text = payload.content.orEmpty(),
                             sentAt = payload.sentAt.orEmpty(),
+                            type = MessageType.fromWire(payload.type),
+                            mediaUrl = payload.mediaUrl?.takeIf { it.isNotBlank() },
                         )
                         Log.d(TAG, "stomp message parsed id=${chat.id} from=$fromRole")
                         _events.tryEmit(ChatWsEvent.Message(chat))
@@ -285,6 +307,8 @@ class ChatWebSocketClient(
 data class StompChatSendBody(
     val senderId: Long,
     val content: String,
+    val type: String = "TEXT",
+    val mediaUrl: String? = null,
 )
 
 @Serializable
@@ -293,6 +317,8 @@ data class StompChatMessagePayload(
     val roomId: String? = null,
     val senderId: Long? = null,
     val content: String? = null,
+    val type: String? = null,
+    val mediaUrl: String? = null,
     @Serializable(with = FlexibleDateTimeSerializer::class)
     val sentAt: String? = null,
 )

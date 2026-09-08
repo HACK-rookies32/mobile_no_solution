@@ -56,9 +56,6 @@ android {
     compileSdk {
         version = release(37)
     }
-    // [보안 방어] 네이티브 빌드에 사용할 NDK 버전 고정(설치본과 일치).
-    ndkVersion = "27.0.12077973"
-
     defaultConfig {
         applicationId = "com.hack.kidhack"
         minSdk = 26
@@ -76,19 +73,10 @@ android {
         // 의도된 취약점(OWASP Mobile M2 Inadequate Supply Chain / M8). 보존: 고치지 말 것. 명세: mobile/docs/vuln-spec-mobile.md
         // AndroidManifest의 ${MAPS_API_KEY} 자리에 주입
         manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
-
-        // [보안 방어] 빌드할 ABI 를 실기기(arm64-v8a)와 에뮬레이터(x86_64)로 제한한다.
-        // x86_64 를 빠뜨리면 에뮬에서 .so 를 못 찾아 UnsatisfiedLinkError 가 난다.
-        // (컴파일 옵션 -std=c++17 등은 Android.mk 에서 지정)
-        ndk {
-            abiFilters += listOf("arm64-v8a", "x86_64")
-        }
     }
 
-    // [보안 방어] 데모 서명 설정.
-    // release 를 고정 keystore 로 서명해 무결성 검사(integrity_check.cpp)가 대조할
-    // 안정적인 서명 지문을 갖게 한다. 리패킹 후 재서명하면 지문이 달라져 탐지되는 시연을 위해서다.
-    // 주의: R8/난독화 비활성(VULN-MOBILE-RE-1)은 그대로 유지한다 — 여기서는 "서명"만 추가한다.
+    // 데모 서명 설정. release 변형을 고정 keystore 로 서명해 설치·시연이 가능하도록 한다.
+    // 주의: R8/난독화 비활성(VULN-MOBILE-RE-1)은 그대로 유지한다 — 여기서는 "서명"만 한다.
     // keystore 비밀번호는 데모용이라 그대로 둔다(이 프로젝트는 의도적 취약점 실습용).
     signingConfigs {
         create("demo") {
@@ -126,7 +114,7 @@ android {
                 "\"https://kidhackapp.com/api\"",
             )
             manifestPlaceholders["usesCleartextTraffic"] = "false"
-            // [보안 방어] 데모 keystore 로 서명 → 무결성 검사가 대조할 안정적 지문 확보.
+            // 데모 keystore 로 서명.
             signingConfig = signingConfigs.getByName("demo")
             // [VULN-MOBILE-RE-1] R8 축소·난독화 완전 비활성(enable=false) + release signingConfig 없음 →
             // 클래스/메서드/문자열이 평문으로 남아 jadx/apktool 리버싱 난이도 최저. 의도된 취약점
@@ -144,14 +132,6 @@ android {
         compose = true
         buildConfig = true
     }
-    // [보안 방어] 네이티브 방어 라이브러리(libdefense.so)는 gradle 이 아니라 미리 빌드해
-    // src/main/jniLibs/<abi>/ 에 넣어 둔다(AGP 가 자동 패키징).
-    //
-    // [왜 externalNativeBuild(cmake/ndkBuild)를 안 쓰나]
-    //   이 프로젝트 경로에 한글("3. 개발\소스코드")이 있어 ndk-build(GNU make)가 파일을 못 찾고,
-    //   SDK cmake.exe 는 이 머신에서 configure 중 크래시한다. 그래서 gradle 빌드 단계에서
-    //   네이티브를 컴파일하지 않고, ASCII 경로에서 미리 만든 .so 만 넣는다.
-    //   .so 재생성 방법은 src/main/cpp/build-defense-so.ps1 참조.
 }
 
 dependencies {

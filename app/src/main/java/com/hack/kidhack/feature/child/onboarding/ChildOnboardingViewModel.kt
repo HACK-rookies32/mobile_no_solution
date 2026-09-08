@@ -208,6 +208,17 @@ class ChildOnboardingViewModel(
                     bodyRes = R.string.child_onboarding_camera_body,
                 ),
             )
+            add(
+                OnboardingStep(
+                    kind = OnboardingPermissionKind.RuntimeSingle,
+                    runtimePermission = KidhackPermissions.microphone,
+                    required = false,
+                    group = OnboardingGroup.Optional,
+                    iconRes = R.drawable.ic_mic,
+                    titleRes = R.string.child_onboarding_mic_title,
+                    bodyRes = R.string.child_onboarding_mic_body,
+                ),
+            )
         }
     }
 }

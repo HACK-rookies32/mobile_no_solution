@@ -342,7 +342,7 @@ val appModule = module {
         val delegate = if (useMock) {
             FakeChatRepository(get())
         } else {
-            RealChatRepository(get(), get(), get())
+            RealChatRepository(get(), get(), get(), get(), androidContext())
         }
         CachedChatRepository(delegate, get())
     }

@@ -21,6 +21,7 @@ import com.hack.kidhack.domain.model.StoreTerminalInfo
 import com.hack.kidhack.domain.model.Charge
 import com.hack.kidhack.domain.model.ChatMessage
 import com.hack.kidhack.domain.model.ChatMessagePage
+import com.hack.kidhack.domain.model.MessageType
 import com.hack.kidhack.domain.model.ChatRoom
 import com.hack.kidhack.domain.model.ChildAlertEvent
 import com.hack.kidhack.domain.model.ChildDashboard
@@ -461,6 +462,15 @@ interface ChatRepository {
     suspend fun messages(roomId: String, before: String? = null, size: Int = 30): ChatMessagePage
     fun observeMessages(roomId: String): Flow<ChatMessage>
     suspend fun send(roomId: String, content: String): ChatMessage
+
+    /**
+     * 로컬 파일(content:// 또는 file:// URI)을 채팅 첨부로 업로드한다.
+     * 서버 응답의 상대 경로(예: `/api/files/chat/42`)를 그대로 돌려준다.
+     */
+    suspend fun uploadMedia(localUri: String, mimeType: String): String
+
+    /** 업로드로 받은 [mediaUrl] 을 STOMP 로 보낸다. type ∈ IMAGE | AUDIO. */
+    suspend fun sendMedia(roomId: String, type: MessageType, mediaUrl: String): ChatMessage
     suspend fun markRead(roomId: String, lastMessageId: String? = null)
 }
 

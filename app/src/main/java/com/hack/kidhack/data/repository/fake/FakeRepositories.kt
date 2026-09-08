@@ -30,6 +30,7 @@ import com.hack.kidhack.domain.model.QrPaymentHistoryItem
 import com.hack.kidhack.domain.model.StoreTerminalInfo
 import com.hack.kidhack.domain.model.Charge
 import com.hack.kidhack.domain.model.ChatMessage
+import com.hack.kidhack.domain.model.MessageType
 import com.hack.kidhack.domain.model.ChatMessagePage
 import com.hack.kidhack.domain.model.ChatRoom
 import com.hack.kidhack.domain.model.ChildPhoto
@@ -821,6 +822,30 @@ class FakeChatRepository(
     override suspend fun send(roomId: String, content: String): ChatMessage {
         val role = sessionRepository.current()?.user?.role ?: Role.PARENT
         val msg = ChatMessage("m-${System.currentTimeMillis()}", roomId, role, content, "방금")
+        store.getOrPut(roomId) { mutableListOf() }.add(msg)
+        incoming.emit(msg)
+        return msg
+    }
+
+    override suspend fun uploadMedia(localUri: String, mimeType: String): String =
+        // 목 모드에서는 서버가 없으니 넘어온 로컬 URI 를 그대로 미디어 경로로 쓴다.
+        localUri
+
+    override suspend fun sendMedia(
+        roomId: String,
+        type: MessageType,
+        mediaUrl: String,
+    ): ChatMessage {
+        val role = sessionRepository.current()?.user?.role ?: Role.PARENT
+        val msg = ChatMessage(
+            id = "m-${System.currentTimeMillis()}",
+            roomId = roomId,
+            fromRole = role,
+            text = "",
+            sentAt = "방금",
+            type = type,
+            mediaUrl = mediaUrl,
+        )
         store.getOrPut(roomId) { mutableListOf() }.add(msg)
         incoming.emit(msg)
         return msg

@@ -280,12 +280,31 @@ data class ChatRoom(
     val childId: Long? = null,
 )
 
+/** 채팅 메시지 종류. 서버와 STOMP 페이로드는 대문자 문자열(TEXT/IMAGE/AUDIO)로 주고받는다. */
+enum class MessageType {
+    TEXT,
+    IMAGE,
+    AUDIO,
+    ;
+
+    companion object {
+        fun fromWire(raw: String?): MessageType = when (raw?.trim()?.uppercase()) {
+            "IMAGE" -> IMAGE
+            "AUDIO" -> AUDIO
+            else -> TEXT
+        }
+    }
+}
+
 data class ChatMessage(
     val id: String,
     val roomId: String,
     val fromRole: Role,
     val text: String,
     val sentAt: String,
+    val type: MessageType = MessageType.TEXT,
+    /** IMAGE·AUDIO 일 때 첨부 경로(예: `/api/files/chat/42`). TEXT 는 null. */
+    val mediaUrl: String? = null,
 )
 
 /**

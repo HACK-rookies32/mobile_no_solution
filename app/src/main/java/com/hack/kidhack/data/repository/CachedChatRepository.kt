@@ -4,6 +4,7 @@ import com.hack.kidhack.data.local.ChatMessageStore
 import com.hack.kidhack.domain.model.ChatMessage
 import com.hack.kidhack.domain.model.ChatMessagePage
 import com.hack.kidhack.domain.model.ChatRoom
+import com.hack.kidhack.domain.model.MessageType
 import com.hack.kidhack.domain.repository.ChatRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.onEach
@@ -50,6 +51,16 @@ class CachedChatRepository(
 
     override suspend fun send(roomId: String, content: String): ChatMessage =
         delegate.send(roomId, content).also { store.append(roomId, it) }
+
+    override suspend fun uploadMedia(localUri: String, mimeType: String): String =
+        delegate.uploadMedia(localUri, mimeType)
+
+    override suspend fun sendMedia(
+        roomId: String,
+        type: MessageType,
+        mediaUrl: String,
+    ): ChatMessage =
+        delegate.sendMedia(roomId, type, mediaUrl).also { store.append(roomId, it) }
 
     override suspend fun markRead(roomId: String, lastMessageId: String?) =
         delegate.markRead(roomId, lastMessageId)

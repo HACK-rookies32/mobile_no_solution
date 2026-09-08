@@ -125,6 +125,7 @@ import com.hack.kidhack.domain.model.QrPaymentHistoryItem
 import com.hack.kidhack.domain.model.StoreTerminalInfo
 import com.hack.kidhack.domain.model.ChildDashboard
 import com.hack.kidhack.domain.model.ChatMessage
+import com.hack.kidhack.domain.model.MessageType
 import com.hack.kidhack.domain.model.ChatMessagePage
 import com.hack.kidhack.domain.model.ChatRoom
 import com.hack.kidhack.domain.model.ChildPhoto
@@ -837,6 +838,8 @@ class RealChatRepository(
     private val api: ChatApi,
     private val ws: ChatWebSocketClient,
     private val sessionRepository: SessionRepository,
+    private val fileApi: FileApi,
+    private val context: Context,
 ) : ChatRepository {
     override suspend fun getOrCreateRoom(parentId: Long, childId: Long): ChatRoom =
         api.createOrGetRoom(CreateChatRoomRequest(parentId, childId)).unwrap().toDomain()
@@ -884,6 +887,32 @@ class RealChatRepository(
             fromRole = role,
             text = content,
             sentAt = now,
+        )
+    }
+
+    override suspend fun uploadMedia(localUri: String, mimeType: String): String =
+        // 공용 파일 업로드(POST /api/files/chat). 응답 url 예: `/api/files/chat/42`.
+        fileApi.upload("chat", context.chatMediaPart(localUri, mimeType)).unwrap().url
+
+    override suspend fun sendMedia(
+        roomId: String,
+        type: MessageType,
+        mediaUrl: String,
+    ): ChatMessage {
+        val session = sessionRepository.current()
+        val role = session?.user?.role ?: Role.PARENT
+        val senderId = session?.user?.id?.toLongOrNull()
+            ?: error("로그인 정보가 없어요")
+        ws.sendMedia(roomId, senderId, type, mediaUrl)
+        val now = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
+        return ChatMessage(
+            id = "local-${System.currentTimeMillis()}",
+            roomId = roomId,
+            fromRole = role,
+            text = "",
+            sentAt = now,
+            type = type,
+            mediaUrl = mediaUrl,
         )
     }
 
@@ -1057,6 +1086,27 @@ private fun Context.filePart(uri: String): MultipartBody.Part {
     }.getOrNull()?.takeIf { it.isNotBlank() }
         ?: ("attachment." + (mime.substringAfter('/').takeIf { it.isNotBlank() } ?: "bin"))
     return MultipartBody.Part.createFormData("file", name, bytes.toRequestBody(mime.toMediaTypeOrNull()))
+}
+
+/**
+ * 채팅 첨부 업로드용 파트. 카메라/갤러리(content://)와 녹음 파일(file://) 을 모두 받는다.
+ * MIME 이 명시로 오므로 확장자를 그 값으로 만들어 붙인다 — 서버가 확장자로 종류를 본다.
+ */
+private fun Context.chatMediaPart(uri: String, mime: String): MultipartBody.Part {
+    val parsed = Uri.parse(uri)
+    val bytes = contentResolver.openInputStream(parsed)?.use { it.readBytes() }
+        ?: throw IllegalStateException("첨부 파일을 읽을 수 없습니다")
+    val ext = when {
+        mime.startsWith("audio") -> "m4a"
+        mime.endsWith("png") -> "png"
+        else -> "jpg"
+    }
+    val name = "chat-${System.currentTimeMillis()}.$ext"
+    return MultipartBody.Part.createFormData(
+        "file",
+        name,
+        bytes.toRequestBody(mime.toMediaTypeOrNull()),
+    )
 }
 
 private fun File.toImagePart(): MultipartBody.Part =

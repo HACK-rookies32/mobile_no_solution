@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.hack.kidhack.data.remote.userMessage
 import com.hack.kidhack.domain.model.ChatMessage
 import com.hack.kidhack.domain.model.ChatRoom
+import com.hack.kidhack.domain.model.MessageType
 import com.hack.kidhack.domain.repository.ChatRepository
 import com.hack.kidhack.domain.repository.SessionRepository
 import kotlinx.coroutines.Job
@@ -117,6 +118,28 @@ class ChildChatViewModel(
                     _state.update { s ->
                         s.copy(draft = text, error = it.userMessage("메시지를 보내지 못했어요"))
                     }
+                }
+        }
+    }
+
+    fun sendImage(localUri: String) = sendMedia(localUri, "image/jpeg", MessageType.IMAGE)
+
+    fun sendAudio(localUri: String) = sendMedia(localUri, "audio/mp4", MessageType.AUDIO)
+
+    private fun sendMedia(localUri: String, mimeType: String, type: MessageType) {
+        val room = _state.value.room ?: return
+        viewModelScope.launch {
+            val sessionChildId = sessionRepository.current()?.user?.id
+            if (sessionChildId == null || boundChildUserId != sessionChildId) {
+                load()
+                return@launch
+            }
+            runCatching {
+                val url = chatRepository.uploadMedia(localUri, mimeType)
+                chatRepository.sendMedia(room.id, type, url)
+            }.onSuccess { append(it) }
+                .onFailure {
+                    _state.update { s -> s.copy(error = it.userMessage("첨부를 보내지 못했어요")) }
                 }
         }
     }

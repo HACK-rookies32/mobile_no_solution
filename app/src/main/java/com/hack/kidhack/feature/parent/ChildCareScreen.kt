@@ -292,11 +292,30 @@ fun ParentChildrenScreen(
     // 부모가 앱을 열면 처음 닿는 화면이 여기라 여기서 묻는다. 이미 거절해서 시스템
     // 대화상자가 뜨지 않는 상태면 조용히 넘어간다.
     LaunchedEffect(Unit) {
-        val permission = KidhackPermissions.notifications ?: return@LaunchedEffect
         val activity = KidhackPermissions.findActivity(context) ?: return@LaunchedEffect
-        if (!KidhackPermissions.canShowSystemDialog(activity, permission)) return@LaunchedEffect
-        permissions.requestOne(permission) { granted ->
-            if (!granted) KidhackPermissions.recordDeny(context, permission)
+
+        // 채팅 첨부(사진 촬영·음성 녹음)에 쓰는 카메라·마이크도 여기서 함께 묻는다.
+        // 거절해도 온보딩·홈 진입을 막지 않는다 — 실제 사용 시점에 다시 요청한다.
+        fun requestChatMedia() {
+            val mediaPerms = listOf(KidhackPermissions.camera, KidhackPermissions.microphone)
+                .filter { KidhackPermissions.canShowSystemDialog(activity, it) }
+            if (mediaPerms.isEmpty()) return
+            permissions.request(*mediaPerms.toTypedArray()) { result ->
+                result.forEach { (perm, granted) ->
+                    if (!granted) KidhackPermissions.recordDeny(context, perm)
+                }
+            }
+        }
+
+        // 안전 구역 이탈·유해 사이트 차단을 푸시로 받으려면 알림 권한이 필요하다(안드로이드 13+).
+        val notif = KidhackPermissions.notifications
+        if (notif != null && KidhackPermissions.canShowSystemDialog(activity, notif)) {
+            permissions.requestOne(notif) { granted ->
+                if (!granted) KidhackPermissions.recordDeny(context, notif)
+                requestChatMedia()
+            }
+        } else {
+            requestChatMedia()
         }
     }
 

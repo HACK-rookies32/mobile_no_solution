@@ -76,7 +76,11 @@ import com.hack.kidhack.core.designsystem.theme.LocalKidhackColors
 import com.hack.kidhack.data.remote.userMessage
 import com.hack.kidhack.domain.model.ChatMessage
 import com.hack.kidhack.domain.model.ChatRoom
+import com.hack.kidhack.domain.model.MessageType
 import com.hack.kidhack.domain.model.Role
+import com.hack.kidhack.feature.chat.ChatAudioBubble
+import com.hack.kidhack.feature.chat.ChatComposer
+import com.hack.kidhack.feature.chat.ChatImageBubble
 import com.hack.kidhack.domain.repository.ChatRepository
 import com.hack.kidhack.domain.repository.ChildRepository
 import com.hack.kidhack.domain.repository.SelectedChildRepository
@@ -302,6 +306,23 @@ class ParentChatViewModel(
         }
     }
 
+    fun sendImage(localUri: String) = sendMedia(localUri, "image/jpeg", MessageType.IMAGE)
+
+    fun sendAudio(localUri: String) = sendMedia(localUri, "audio/mp4", MessageType.AUDIO)
+
+    private fun sendMedia(localUri: String, mimeType: String, type: MessageType) {
+        val room = _state.value.selectedRoom ?: return
+        viewModelScope.launch {
+            runCatching {
+                val url = chatRepository.uploadMedia(localUri, mimeType)
+                chatRepository.sendMedia(room.id, type, url)
+            }.onSuccess { append(it) }
+                .onFailure { t ->
+                    _state.update { it.copy(error = t.userMessage("첨부를 보내지 못했어요")) }
+                }
+        }
+    }
+
     private fun observe(roomId: String?) {
         if (roomId == null) return
         observeJob = viewModelScope.launch {
@@ -381,6 +402,8 @@ fun ParentChatScreen(viewModel: ParentChatViewModel = koinViewModel()) {
                 onDraft = viewModel::onDraft,
                 onSend = viewModel::send,
                 onLoadOlder = viewModel::loadOlder,
+                onSendImage = viewModel::sendImage,
+                onSendAudio = viewModel::sendAudio,
             )
         }
     }
@@ -539,6 +562,8 @@ private fun ColumnScope.RoomDetail(
     onDraft: (String) -> Unit,
     onSend: () -> Unit,
     onLoadOlder: () -> Unit,
+    onSendImage: (String) -> Unit,
+    onSendAudio: (String) -> Unit,
 ) {
     val colors = LocalKidhackColors.current
     val listState = rememberLazyListState()
@@ -629,7 +654,17 @@ private fun ColumnScope.RoomDetail(
         }
     }
 
-    ChatComposer(draft = state.draft, onDraft = onDraft, onSend = onSend)
+    ChatComposer(
+        draft = state.draft,
+        onDraft = onDraft,
+        onSend = onSend,
+        canSend = state.draft.isNotBlank(),
+        onImage = onSendImage,
+        onAudio = onSendAudio,
+        hint = stringResource(R.string.parent_chat_input_hint),
+        sendContentDescription = stringResource(R.string.parent_chat_send),
+        modifier = Modifier.imePadding(),
+    )
 }
 
 /**
@@ -658,21 +693,29 @@ private fun MessageRow(message: ChatMessage) {
             Stamp(message.sentAt)
             Spacer(Modifier.width(6.dp))
         }
-        Text(
-            text = message.text,
-            modifier = Modifier
-                .widthIn(max = 240.dp)
-                .clip(shape)
-                .background(if (mine) colors.brand else colors.surface)
-                .padding(horizontal = 14.dp, vertical = 10.dp),
-            color = if (mine) Color.White else colors.text,
-            fontFamily = KidhackFontFamily,
-            fontWeight = FontSemibold,
-            fontSize = 14.5.sp,
-            lineHeight = 21.sp,
-            letterSpacing = (-0.25).sp,
-            style = LocalTextStyle.current.copy(lineBreak = KidLineBreak),
-        )
+        when (message.type) {
+            MessageType.IMAGE -> ChatImageBubble(mediaUrl = message.mediaUrl)
+            MessageType.AUDIO -> ChatAudioBubble(
+                mediaUrl = message.mediaUrl,
+                bubbleColor = if (mine) colors.brand else colors.surface,
+                contentColor = if (mine) Color.White else colors.text,
+            )
+            MessageType.TEXT -> Text(
+                text = message.text,
+                modifier = Modifier
+                    .widthIn(max = 240.dp)
+                    .clip(shape)
+                    .background(if (mine) colors.brand else colors.surface)
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                color = if (mine) Color.White else colors.text,
+                fontFamily = KidhackFontFamily,
+                fontWeight = FontSemibold,
+                fontSize = 14.5.sp,
+                lineHeight = 21.sp,
+                letterSpacing = (-0.25).sp,
+                style = LocalTextStyle.current.copy(lineBreak = KidLineBreak),
+            )
+        }
         if (!mine) {
             Spacer(Modifier.width(6.dp))
             Stamp(message.sentAt)
@@ -692,66 +735,3 @@ private fun Stamp(sentAt: String) {
     )
 }
 
-/** 보내기 줄. 글자가 없으면 보내기가 꺼진 색으로 남는다. */
-@Composable
-private fun ChatComposer(draft: String, onDraft: (String) -> Unit, onSend: () -> Unit) {
-    val colors = LocalKidhackColors.current
-    val canSend = draft.isNotBlank()
-    Column(Modifier.fillMaxWidth().background(colors.card)) {
-        HorizontalDivider(color = colors.line)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                // 탭 껍데기(TabShell)가 비워 둔 만큼을 소비했다고 알려 주므로, 여기서는
-                // 모자란 만큼만 더하면 키보드 바로 위에 앉는다. 전에는 네비바를 직접 빼서
-                // 맞췄는데, 그 식은 탭 바가 접혔을 때만 맞았다.
-                .imePadding()
-                .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            BasicTextField(
-                value = draft,
-                onValueChange = onDraft,
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(22.dp))
-                    .background(colors.surface)
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                textStyle = TextStyle(
-                    fontFamily = KidhackFontFamily,
-                    fontWeight = FontSemibold,
-                    fontSize = 13.5.sp,
-                    color = colors.text,
-                ),
-                cursorBrush = SolidColor(colors.brand),
-                maxLines = 4,
-                decorationBox = { inner ->
-                    if (draft.isEmpty()) {
-                        Text(
-                            stringResource(R.string.parent_chat_input_hint),
-                            color = colors.subtle,
-                            fontSize = 13.5.sp,
-                        )
-                    }
-                    inner()
-                },
-            )
-            Spacer(Modifier.width(9.dp))
-            Box(
-                modifier = Modifier
-                    .size(42.dp)
-                    .clip(CircleShape)
-                    .background(if (canSend) colors.brand else colors.line)
-                    .then(if (canSend) Modifier.clickable(onClick = onSend) else Modifier),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_send),
-                    contentDescription = stringResource(R.string.parent_chat_send),
-                    modifier = Modifier.size(17.dp),
-                    tint = Color.White,
-                )
-            }
-        }
-    }
-}

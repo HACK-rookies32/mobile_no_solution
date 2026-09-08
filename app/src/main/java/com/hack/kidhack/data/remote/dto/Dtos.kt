@@ -562,6 +562,10 @@ data class ChatMessageDto(
     val sentAt: String = "",
     val senderId: Long? = null,
     val content: String? = null,
+    /** TEXT | IMAGE | AUDIO. 없으면 TEXT 로 본다. */
+    val type: String = "TEXT",
+    /** 첨부 경로(예: `/api/files/chat/42`). TEXT 는 null. */
+    val mediaUrl: String? = null,
 )
 
 @Serializable

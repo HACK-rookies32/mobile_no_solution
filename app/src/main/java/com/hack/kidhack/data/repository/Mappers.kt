@@ -382,6 +382,8 @@ fun ChatMessageDto.toDomain(myUserId: Long? = null, myRole: Role = Role.PARENT):
         fromRole = role,
         text = resolvedText,
         sentAt = sentAt,
+        type = com.hack.kidhack.domain.model.MessageType.fromWire(type),
+        mediaUrl = mediaUrl?.takeIf { it.isNotBlank() },
     )
 }
 

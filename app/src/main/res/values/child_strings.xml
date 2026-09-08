@@ -244,6 +244,8 @@
     <string name="child_onboarding_open_settings">설정 열기</string>
     <string name="child_onboarding_special_note">이 세 가지는 안드로이드 정책상 설정 앱에서만 켤 수 있어요. 한 번 켜면 계속 유지돼요.</string>
     <string name="child_onboarding_camera_body">사진 요청을 받을 때만 써요</string>
+    <string name="child_onboarding_mic_title">마이크</string>
+    <string name="child_onboarding_mic_body">음성 메시지를 보낼 때만 써요</string>
     <string name="child_onboarding_usage_title">앱 사용 기록</string>
     <string name="child_onboarding_usage_body">사용 시간을 부모님께 보내요</string>
     <string name="child_onboarding_overlay_title">차단 안내 표시</string>
