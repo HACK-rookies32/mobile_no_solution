@@ -197,7 +197,7 @@ data class PairingCodeDto(
 )
 
 @Serializable
-data class PairingConnectRequest(val code: String)
+data class PairingConnectRequest(val code: String, val sort: String = "")
 
 @Serializable
 data class ChildDto(
