@@ -64,6 +64,9 @@ import com.hack.kidhack.data.remote.dto.NotificationSettingsDto
 import com.hack.kidhack.data.remote.dto.PairingCodeDto
 import com.hack.kidhack.data.remote.dto.PairingConnectRequest
 import com.hack.kidhack.data.remote.dto.PaymentDto
+import com.hack.kidhack.data.remote.dto.PhoneVerifyRequest
+import com.hack.kidhack.data.remote.dto.PhoneVerifyResponse
+import com.hack.kidhack.data.remote.dto.PhoneVerifySendCodeRequest
 import com.hack.kidhack.data.remote.dto.PlaceRequest
 import com.hack.kidhack.data.remote.dto.PlaceResponse
 import com.hack.kidhack.data.remote.dto.PointBalanceDto
@@ -154,6 +157,24 @@ interface AuthApi {
 
     @POST("auth/signup")
     suspend fun signup(@Body body: SignupRequest): ApiEnvelope<UserDto>
+
+    /**
+     * 회원가입 휴대폰 인증 — 번호로 6자리 인증코드 발송. 로그인 불필요.
+     *
+     * 서버는 코드를 저장·검증하지 않고 응답 body 에 그대로 실어 준다([SendCodeResponse.code]).
+     * 코드는 화면에 노출하지 않는다(패킷으로만 확인 가능).
+     */
+    @POST("auth/phone/send-code")
+    suspend fun sendPhoneCode(@Body body: PhoneVerifySendCodeRequest): ApiEnvelope<SendCodeResponse>
+
+    /**
+     * 회원가입 휴대폰 인증 — 6자리 코드 검증. 로그인 불필요.
+     *
+     * 서버가 실제로 대조해 [PhoneVerifyResponse.valid] 로 결과를 준다. 클라는 이 응답을 신뢰한다
+     * ([VULN-MOBILE-PHONEVERIFY-1]) — 응답을 valid:true 로 변조하면 우회된다.
+     */
+    @POST("auth/phone/verify")
+    suspend fun verifyPhoneCode(@Body body: PhoneVerifyRequest): ApiEnvelope<PhoneVerifyResponse>
 
     @POST("auth/login")
     suspend fun login(@Body body: LoginRequest): ApiEnvelope<LoginResponse>

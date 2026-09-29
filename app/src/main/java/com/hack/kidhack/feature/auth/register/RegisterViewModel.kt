@@ -28,6 +28,23 @@ data class RegisterUiState(
     val loginId: String = "",
     val realName: String = "",
     val phoneNumber: String = "",
+    /** 휴대폰 인증: 사용자가 입력한 6자리. */
+    val phoneCodeInput: String = "",
+    /** 휴대폰 인증 통과 여부(클라 전용 검증 결과). 가입 요청 body 로 그대로 나간다. */
+    val phoneVerified: Boolean = false,
+    /**
+     * [VULN-MOBILE-PHONEVERIFY-1] 서버 send-code 응답이 실어 준 코드. 화면에는 절대 표시하지 않고
+     * 사용자 입력과 대조하는 용도로만 메모리에 보관한다(패킷으로만 확인 가능).
+     */
+    val sentCode: String? = null,
+    /** 발급 코드 만료 시각(epoch millis). 0 이면 미발급. */
+    val phoneCodeExpiresAt: Long = 0L,
+    /** 인증요청 진행 중(중복 요청 잠금). */
+    val phoneCodeSending: Boolean = false,
+    /** 「확인」(서버 검증) 진행 중. */
+    val phoneVerifying: Boolean = false,
+    /** 「확인」 결과 안내(불일치 등). 성공 시 null 이고 phoneVerified=true 로 표시한다. */
+    val phoneVerifyMessage: String? = null,
     val email: String = "",
     val birthDate: String = "",
     val address: String = "",
@@ -58,6 +75,9 @@ data class RegisterUiState(
         get() = if (role == Role.CHILD) 5 else 3
 }
 
+/** 휴대폰 인증코드 유효시간(3분). */
+private const val PHONE_CODE_TTL_MS = 180_000L
+
 class RegisterViewModel(
     private val authRepository: AuthRepository,
     private val pairingRepository: PairingRepository,
@@ -77,7 +97,105 @@ class RegisterViewModel(
     fun onLoginId(v: String) = _state.update { it.copy(loginId = v) }
     fun onRealName(v: String) = _state.update { it.copy(realName = v) }
     fun onPhoneNumber(v: String) = _state.update {
-        it.copy(phoneNumber = digitsOnlyPhone(v))
+        // 번호를 바꾸면 이전 인증은 무효 — 코드·인증상태를 초기화한다.
+        it.copy(
+            phoneNumber = digitsOnlyPhone(v),
+            phoneVerified = false,
+            sentCode = null,
+            phoneCodeInput = "",
+            phoneCodeExpiresAt = 0L,
+            phoneVerifyMessage = null,
+        )
+    }
+
+    /**
+     * 휴대폰 인증코드 발송 요청. 서버가 코드를 응답에 실어 주지만 화면에는 표시하지 않고
+     * [RegisterUiState.sentCode] 에만 담는다. 유효시간 3분.
+     *
+     * 정상 사용자는 본인 번호로 온 코드를 (실서버라면 SMS 로) 받아 입력해야 하지만,
+     * 이 랩에서는 코드가 응답 패킷에만 실린다([VULN-MOBILE-PHONEVERIFY-1]).
+     */
+    fun requestPhoneCode() {
+        val s = _state.value
+        if (s.phoneCodeSending) return
+        if (s.phoneNumber.isBlank()) {
+            _state.update { it.copy(error = "휴대폰 번호를 입력해 주세요") }
+            return
+        }
+        viewModelScope.launch {
+            _state.update { it.copy(phoneCodeSending = true, error = null) }
+            runCatching { authRepository.sendPhoneCode(formatPhoneNumber(s.phoneNumber)) }
+                .onSuccess { code ->
+                    _state.update {
+                        it.copy(
+                            phoneCodeSending = false,
+                            sentCode = code,
+                            phoneCodeInput = "",
+                            phoneVerified = false,
+                            phoneVerifyMessage = null,
+                            phoneCodeExpiresAt = System.currentTimeMillis() + PHONE_CODE_TTL_MS,
+                        )
+                    }
+                }
+                .onFailure { t ->
+                    _state.update {
+                        it.copy(phoneCodeSending = false, error = t.userMessage("인증번호 발송에 실패했어요"))
+                    }
+                }
+        }
+    }
+
+    /**
+     * 인증코드 입력. 입력이 발급 코드와 일치하고 만료 전이면 [RegisterUiState.phoneVerified] 를 세운다.
+     *
+     * [VULN-MOBILE-PHONEVERIFY-1] 코드 일치 검증이 클라이언트에만 있다. 서버는 코드를 검증하지 않고
+     * 가입 요청의 phoneVerified 불리언만 신뢰하므로, 패킷에서 그 값만 true 로 바꿔도 우회된다.
+     */
+    fun onPhoneCodeInput(v: String) = _state.update {
+        // 입력이 바뀌면 이전 인증 결과는 무효 — 「확인」을 다시 눌러야 한다.
+        it.copy(
+            phoneCodeInput = v.filter { ch -> ch.isDigit() }.take(6),
+            phoneVerified = false,
+            phoneVerifyMessage = null,
+            error = null,
+        )
+    }
+
+    /**
+     * 「확인」 — 입력한 6자리를 발급 코드와 대조한다. 일치·미만료면 phoneVerified=true("인증되었습니다"),
+     * 아니면 안내 문구를 남긴다.
+     *
+     * [VULN-MOBILE-PHONEVERIFY-1] 이 대조가 클라이언트에만 있다. 서버는 코드를 검증하지 않고
+     * 가입 요청의 phoneVerified 불리언만 신뢰하므로, 패킷에서 그 값만 true 로 바꿔도 우회된다.
+     */
+    fun confirmPhoneCode() {
+        val s = _state.value
+        if (s.phoneVerifying) return
+        when {
+            s.sentCode == null -> {
+                _state.update { it.copy(phoneVerifyMessage = "먼저 인증요청을 눌러주세요") }
+                return
+            }
+            s.phoneCodeInput.length < 6 -> {
+                _state.update { it.copy(phoneVerifyMessage = "인증번호 6자리를 입력해주세요") }
+                return
+            }
+        }
+        viewModelScope.launch {
+            _state.update { it.copy(phoneVerifying = true, phoneVerifyMessage = null) }
+            runCatching { authRepository.verifyPhoneCode(formatPhoneNumber(s.phoneNumber), s.phoneCodeInput) }
+                .onSuccess { valid ->
+                    _state.update {
+                        if (valid) it.copy(phoneVerifying = false, phoneVerified = true, phoneVerifyMessage = null)
+                        else it.copy(phoneVerifying = false, phoneVerified = false, phoneVerifyMessage = "인증번호가 올바르지 않아요")
+                    }
+                }
+                .onFailure { t ->
+                    _state.update {
+                        it.copy(phoneVerifying = false, phoneVerified = false, phoneVerifyMessage = t.userMessage("인증 확인에 실패했어요"))
+                    }
+                }
+        }
     }
     fun onEmail(v: String) = _state.update { it.copy(email = v) }
     fun onBirthDate(v: String) = _state.update { it.copy(birthDate = v) }
@@ -112,6 +230,8 @@ class RegisterViewModel(
             s.realName.isBlank() -> _state.update { it.copy(error = "이름을 입력해 주세요") }
             s.nickname.isBlank() -> _state.update { it.copy(error = "닉네임을 입력해 주세요") }
             s.phoneNumber.isBlank() -> _state.update { it.copy(error = "휴대폰 번호를 입력해 주세요") }
+            // 정직한 사용자용 UX 게이트 — 인증 완료해야 다음으로. (서버 게이트는 signup 의 phoneVerified)
+            !s.phoneVerified -> _state.update { it.copy(error = "휴대폰 인증을 완료해 주세요") }
             role != Role.CHILD && s.email.isBlank() ->
                 _state.update { it.copy(error = "이메일을 입력해 주세요") }
             !birthOk -> _state.update { it.copy(error = "생년월일을 선택해 주세요") }
@@ -207,6 +327,7 @@ class RegisterViewModel(
                         address = s.address.trim().ifBlank { null },
                         role = role,
                         parentId = s.parentId.toLongOrNull()?.takeIf { role == Role.CHILD },
+                        phoneVerified = s.phoneVerified,
                     )
                 }.onSuccess { session ->
                     if (role == Role.CHILD) {

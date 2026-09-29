@@ -89,10 +89,31 @@ data class SignupRequest(
     val profileImageUrl: String? = null,
     val role: String,
     val parentId: Long? = null,
+    // [VULN-MOBILE-PHONEVERIFY-1] 휴대폰 인증 통과 여부를 클라가 직접 담아 보낸다.
+    //   실제 코드 일치 검증은 클라에서만 하고, 서버는 이 불리언만 신뢰한다.
+    //   패킷에서 false→true 로 바꾸면 인증코드 없이도 가입이 통과된다.
+    val phoneVerified: Boolean = false,
 )
 
 @Serializable
 data class RefreshRequest(val refreshToken: String)
+
+/** 회원가입 휴대폰 인증 - 인증코드 발송 요청. 응답은 [SendCodeResponse] 를 공유한다. */
+@Serializable
+data class PhoneVerifySendCodeRequest(val phoneNumber: String)
+
+/** 회원가입 휴대폰 인증 - 코드 검증 요청. */
+@Serializable
+data class PhoneVerifyRequest(val phoneNumber: String, val code: String)
+
+/**
+ * 회원가입 휴대폰 인증 - 코드 검증 결과.
+ *
+ * [VULN-MOBILE-PHONEVERIFY-1] 클라가 이 valid 응답을 신뢰해 다음 단계로 넘어간다.
+ * Burp 로 valid:false→true 로 변조하면 틀린 코드로도 인증을 통과시킬 수 있다(응답 변조 우회).
+ */
+@Serializable
+data class PhoneVerifyResponse(val valid: Boolean = false)
 
 /**
  * 인증코드 발송 결과. 아이디 찾기·비밀번호 재설정이 같은 형태를 쓴다.
