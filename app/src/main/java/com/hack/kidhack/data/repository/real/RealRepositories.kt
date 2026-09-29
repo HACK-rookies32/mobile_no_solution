@@ -89,6 +89,8 @@ import com.hack.kidhack.data.remote.dto.PairingConnectRequest
 import com.hack.kidhack.data.remote.dto.PlaceRequest
 import com.hack.kidhack.data.remote.dto.RemoteCommandAckRequest
 import com.hack.kidhack.data.remote.dto.ResetPasswordRequest
+import com.hack.kidhack.data.remote.dto.PhoneVerifyRequest
+import com.hack.kidhack.data.remote.dto.PhoneVerifySendCodeRequest
 import com.hack.kidhack.data.remote.dto.ResetPasswordSendCodeRequest
 import com.hack.kidhack.data.remote.dto.SignupRequest
 import com.hack.kidhack.data.remote.dto.TransferRequest
@@ -221,6 +223,7 @@ class RealAuthRepository(
         profileImageUrl: String?,
         role: Role,
         parentId: Long?,
+        phoneVerified: Boolean,
     ): Session {
         // Signup response has User only (no tokens). Do not auto-login.
         // [VULN-MOBILE-AUTHZ-1] 가입 role 을 클라이언트(가입 화면 라디오 선택값)가 결정해 그대로 전송한다.
@@ -240,6 +243,7 @@ class RealAuthRepository(
                 profileImageUrl = profileImageUrl,
                 role = role.name,
                 parentId = parentId,
+                phoneVerified = phoneVerified,
             ),
         ).unwrap().toDomain()
         val session = Session(
@@ -276,6 +280,18 @@ class RealAuthRepository(
         chatWebSocketClient.reset()
         sessionEvents.emitLogout()
     }
+
+    // [VULN-MOBILE-PHONEVERIFY-1] 서버가 응답에 코드를 실어 주므로 그대로 받아 반환한다.
+    //   화면에는 노출하지 않고 ViewModel 이 사용자 입력과 대조하는 용도로만 쓴다(클라 전용 검증).
+    override suspend fun sendPhoneCode(phoneNumber: String): String =
+        api.sendPhoneCode(PhoneVerifySendCodeRequest(phoneNumber = phoneNumber))
+            .unwrap().code.orEmpty()
+
+    // [VULN-MOBILE-PHONEVERIFY-1] 서버가 실제로 대조해 valid 를 주지만, 클라는 이 응답을 신뢰한다.
+    //   Burp 로 valid:false→true 로 변조하면 틀린 코드로도 통과한다(응답 변조 우회).
+    override suspend fun verifyPhoneCode(phoneNumber: String, code: String): Boolean =
+        api.verifyPhoneCode(PhoneVerifyRequest(phoneNumber = phoneNumber, code = code))
+            .unwrap().valid
 
     override suspend fun sendFindIdCode(username: String, email: String): SentCode =
         api.sendFindIdCode(FindIdSendCodeRequest(username = username, email = email))

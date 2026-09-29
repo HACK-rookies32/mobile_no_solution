@@ -68,7 +68,23 @@ interface AuthRepository {
         profileImageUrl: String? = null,
         role: Role,
         parentId: Long?,
+        phoneVerified: Boolean = false,
     ): Session
+
+    /**
+     * 회원가입 휴대폰 인증 1단계 — 번호로 6자리 인증코드 발송.
+     *
+     * 서버가 코드를 응답에 실어 주므로 그 값을 반환한다. 화면에는 노출하지 않고
+     * 클라가 사용자 입력과 대조하는 용도로만 메모리에 보관한다([VULN-MOBILE-PHONEVERIFY-1]).
+     */
+    suspend fun sendPhoneCode(phoneNumber: String): String
+
+    /**
+     * 회원가입 휴대폰 인증 2단계 — 6자리 코드를 서버로 보내 검증하고 결과(valid)를 받는다.
+     *
+     * [VULN-MOBILE-PHONEVERIFY-1] 클라는 이 서버 응답을 신뢰해 진행한다 — 응답 변조로 우회된다.
+     */
+    suspend fun verifyPhoneCode(phoneNumber: String, code: String): Boolean
 
     /**
      * 가입 전 아이디·이메일 중복 확인.

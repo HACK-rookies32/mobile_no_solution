@@ -134,6 +134,7 @@ class FakeAuthRepository(
         profileImageUrl: String?,
         role: Role,
         parentId: Long?,
+        phoneVerified: Boolean,
     ): Session {
         delay(300)
         require(loginId.isNotBlank() && password.isNotBlank()) { "아이디와 비밀번호를 입력해 주세요" }
@@ -189,6 +190,19 @@ class FakeAuthRepository(
         chatMessageStore.clear()
         chatWebSocketClient.reset()
         sessionEvents.emitLogout()
+    }
+
+    /** 목업 휴대폰 인증 발송. 서버처럼 코드를 반환한다(화면 미노출, 클라가 대조). 검증은 [FAKE_CODE] 로 통과. */
+    override suspend fun sendPhoneCode(phoneNumber: String): String {
+        delay(300)
+        require(phoneNumber.isNotBlank()) { "휴대폰 번호를 입력해 주세요" }
+        return FAKE_CODE
+    }
+
+    /** 목업 휴대폰 인증 검증 — [FAKE_CODE] 와 일치할 때만 valid. */
+    override suspend fun verifyPhoneCode(phoneNumber: String, code: String): Boolean {
+        delay(300)
+        return code.trim() == FAKE_CODE
     }
 
     /** 목업은 서버처럼 6자리 코드를 응답에 실어 준다. 검증은 [FAKE_CODE] 로만 통과한다. */

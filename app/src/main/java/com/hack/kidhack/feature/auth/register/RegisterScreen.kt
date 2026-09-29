@@ -277,6 +277,50 @@ private fun InfoStep(
         visualTransformation = PhoneNumberVisualTransformation(),
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
     )
+    // 휴대폰 인증(인라인). 인증번호는 문자로만 받는다 — 화면에는 코드를 절대 표시하지 않는다.
+    // [VULN-MOBILE-PHONEVERIFY-1] 실제 일치 검증은 여기(클라)에서만 한다.
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.Bottom,
+    ) {
+        Box(modifier = Modifier.weight(1f)) {
+            KidTextField(
+                state.phoneCodeInput,
+                viewModel::onPhoneCodeInput,
+                "인증번호",
+                placeholder = "문자로 받은 6자리",
+                enabled = state.sentCode != null,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            )
+        }
+        KidButton(
+            text = when {
+                state.phoneCodeSending -> "발송 중…"
+                state.sentCode != null -> "재전송"
+                else -> "인증요청"
+            },
+            onClick = viewModel::requestPhoneCode,
+            modifier = Modifier.padding(bottom = 4.dp),
+            enabled = !state.phoneCodeSending,
+        )
+    }
+    // 발급 후 아직 인증 전이면 「확인」 버튼으로 코드를 대조한다.
+    if (state.sentCode != null && !state.phoneVerified) {
+        KidButton(
+            text = if (state.phoneVerifying) "확인 중…" else "확인",
+            onClick = viewModel::confirmPhoneCode,
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !state.phoneVerifying && !state.phoneCodeSending,
+        )
+    }
+    if (state.phoneVerified) {
+        Text("✓ 인증되었습니다", color = colors.safe, fontSize = 13.sp)
+    } else if (state.phoneVerifyMessage != null) {
+        Text(state.phoneVerifyMessage!!, color = colors.danger, fontSize = 13.sp)
+    } else if (state.sentCode != null) {
+        Text("인증번호를 발송했어요. 문자로 받은 6자리를 입력하고 「확인」을 눌러주세요.", color = colors.muted, fontSize = 13.sp)
+    }
     KidTextField(
         state.email,
         viewModel::onEmail,
